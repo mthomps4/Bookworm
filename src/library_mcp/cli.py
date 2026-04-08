@@ -15,7 +15,7 @@ from .ingest import run_ingest
 from .logging_config import setup_logging
 from .manifest import load_manifest, remove_manifest_entry, save_manifest
 
-app = typer.Typer(name="library", help="Library MCP — manage your ebook knowledge base.")
+app = typer.Typer(name="bookworm", help="BookWorm — manage your ebook knowledge base.")
 console = Console()
 
 
@@ -24,10 +24,11 @@ def ingest(
     full: bool = typer.Option(False, "--full", help="Force full rebuild of the index"),
     file: Optional[str] = typer.Option(None, "--file", help="Ingest a specific file"),
     tag: Optional[str] = typer.Option(None, "--tag", help="Version tag for the ingested book"),
+    path: Optional[str] = typer.Option(None, "--path", help="Ingest from an alternate directory (accumulates, won't remove books from other dirs)"),
 ) -> None:
     """Scan inbox and ingest new or changed books."""
     setup_logging()
-    run_ingest(full=full, file=file, tag=tag)
+    run_ingest(full=full, file=file, tag=tag, path=path)
 
 
 @app.command(name="list")
@@ -37,7 +38,7 @@ def list_books() -> None:
     manifest = load_manifest(config.library.manifest_path)
 
     if not manifest.books:
-        console.print("[yellow]No books indexed yet.[/yellow] Run `library ingest` first.")
+        console.print("[yellow]No books indexed yet.[/yellow] Run `bookworm ingest` first.")
         return
 
     table = Table(title="Indexed Books")
@@ -72,7 +73,7 @@ def search(
     embedder = create_embedder(config.embeddings)
 
     if db.count() == 0:
-        console.print("[yellow]Library is empty.[/yellow] Run `library ingest` first.")
+        console.print("[yellow]Library is empty.[/yellow] Run `bookworm ingest` first.")
         return
 
     query_embedding = embedder.embed([query])[0]

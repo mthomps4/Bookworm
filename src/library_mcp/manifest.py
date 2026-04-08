@@ -77,8 +77,19 @@ class IngestAction:
         return f"IngestAction({self.filename!r}, {self.action!r})"
 
 
-def diff_manifest(manifest: Manifest, books_dir: Path, allowed_formats: list[str] | None = None) -> list[IngestAction]:
-    """Compare manifest against files on disk. Returns list of actions needed."""
+def diff_manifest(
+    manifest: Manifest,
+    books_dir: Path,
+    allowed_formats: list[str] | None = None,
+    detect_removals: bool = True,
+) -> list[IngestAction]:
+    """Compare manifest against files on disk. Returns list of actions needed.
+
+    If detect_removals is False, only additions and updates are returned.
+    This is used when ingesting from an ad-hoc path — we don't want to purge
+    books that came from other directories.
+    """
+    resolved_dir = str(books_dir.resolve())
     on_disk = scan_books_dir(books_dir, allowed_formats)
     actions: list[IngestAction] = []
 
@@ -94,13 +105,17 @@ def diff_manifest(manifest: Manifest, books_dir: Path, allowed_formats: list[str
             ))
         # else: unchanged, skip
 
-    # Check manifest for removed files
-    for filename in manifest.books:
-        if filename not in on_disk:
-            actions.append(IngestAction(
-                filename, "remove",
-                old_hash=manifest.books[filename].file_hash,
-            ))
+    # Check manifest for removed files — only for books from this directory
+    if detect_removals:
+        for filename, entry in manifest.books.items():
+            if filename not in on_disk:
+                # Only flag removal if the book came from this directory
+                # (empty source_dir means legacy entry — treat as belonging to default dir)
+                if not entry.source_dir or entry.source_dir == resolved_dir:
+                    actions.append(IngestAction(
+                        filename, "remove",
+                        old_hash=entry.file_hash,
+                    ))
 
     return actions
 
@@ -122,6 +137,7 @@ def update_manifest_entry(
     file_size_bytes: int,
     version_tag: str | None = None,
     ocr: bool = False,
+    source_dir: str = "",
 ) -> None:
     """Add or update a manifest entry."""
     manifest.books[filename] = ManifestEntry(
@@ -133,6 +149,7 @@ def update_manifest_entry(
         ingested_at=datetime.now(timezone.utc).isoformat(),
         file_size_bytes=file_size_bytes,
         ocr=ocr,
+        source_dir=source_dir,
     )
 
 

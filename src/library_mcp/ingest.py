@@ -35,11 +35,40 @@ def run_ingest(
     full: bool = False,
     file: str | None = None,
     tag: str | None = None,
+    path: str | None = None,
     config: AppConfig | None = None,
-) -> None:
-    """Run the ingestion pipeline."""
+) -> str:
+    """Run the ingestion pipeline.
+
+    Args:
+        full: Wipe DB and re-ingest everything.
+        file: Ingest a specific file by name.
+        tag: Version tag to attach to ingested books.
+        path: Override books_dir with an ad-hoc path. Books from other
+              directories are not removed when using this.
+        config: Override the default config.
+
+    Returns:
+        Summary message of what happened.
+    """
     if config is None:
         config = load_config()
+
+    # Resolve the effective books directory
+    if path:
+        books_dir = Path(path).resolve()
+        if not books_dir.exists():
+            msg = f"Path not found: {books_dir}"
+            console.print(f"[red]{msg}[/red]")
+            return msg
+        if not books_dir.is_dir():
+            # Single file given as path — treat as --file from that directory
+            file = books_dir.name
+            books_dir = books_dir.parent
+        ad_hoc = True
+    else:
+        books_dir = config.library.books_dir
+        ad_hoc = False
 
     manifest_path = config.library.manifest_path
     manifest = load_manifest(manifest_path)
@@ -52,19 +81,20 @@ def run_ingest(
             f"Existing vectors are invalidated."
         )
         if not full:
-            console.print("[yellow]Run with --full to rebuild all embeddings.[/yellow]")
-            return
+            msg = "Embedding model changed. Run with --full to rebuild all embeddings."
+            console.print(f"[yellow]{msg}[/yellow]")
+            return msg
         console.print("[bold]Full rebuild requested — proceeding.[/bold]")
 
     db = VectorDB(config.library.db_path)
     embedder = create_embedder(config.embeddings)
 
-    if full:
-        _full_rebuild(config, manifest, manifest_path, db, embedder, tag)
+    if full and not ad_hoc:
+        return _full_rebuild(config, manifest, manifest_path, db, embedder, tag, books_dir)
     elif file:
-        _ingest_single_file(config, manifest, manifest_path, db, embedder, file, tag)
+        return _ingest_single_file(config, manifest, manifest_path, db, embedder, file, tag, books_dir)
     else:
-        _incremental_ingest(config, manifest, manifest_path, db, embedder, tag)
+        return _incremental_ingest(config, manifest, manifest_path, db, embedder, tag, books_dir, ad_hoc)
 
 
 def _full_rebuild(
@@ -74,17 +104,20 @@ def _full_rebuild(
     db: VectorDB,
     embedder: EmbeddingFunc,
     tag: str | None,
-) -> None:
+    books_dir: Path,
+) -> str:
     """Wipe DB and re-ingest everything."""
     console.print("[bold]Full rebuild — clearing database...[/bold]")
     db.reset()
     manifest.books.clear()
 
-    on_disk = scan_books_dir(config.library.books_dir, config.library.allowed_formats)
+    on_disk = scan_books_dir(books_dir, config.library.allowed_formats)
     if not on_disk:
-        console.print("[yellow]No books found in inbox.[/yellow]")
-        return
+        msg = "No books found in inbox."
+        console.print(f"[yellow]{msg}[/yellow]")
+        return msg
 
+    resolved = str(books_dir.resolve())
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -95,8 +128,7 @@ def _full_rebuild(
         task = progress.add_task("Ingesting books...", total=len(on_disk))
         for filename, path in on_disk.items():
             progress.update(task, description=f"Ingesting {filename}")
-            _process_book(config, manifest, db, embedder, path, filename, tag)
-            # Save after each book so partial progress survives crashes
+            _process_book(config, manifest, db, embedder, path, filename, tag, resolved)
             save_manifest(manifest, manifest_path)
             progress.advance(task)
 
@@ -104,7 +136,9 @@ def _full_rebuild(
     manifest.embedding_model = config.embeddings.model
     manifest.db_path = str(config.library.db_path)
     save_manifest(manifest, manifest_path)
-    console.print(f"[green]Full rebuild complete.[/green] {len(manifest.books)} books indexed.")
+    msg = f"Full rebuild complete. {len(manifest.books)} books indexed."
+    console.print(f"[green]{msg}[/green]")
+    return msg
 
 
 def _incremental_ingest(
@@ -114,13 +148,21 @@ def _incremental_ingest(
     db: VectorDB,
     embedder: EmbeddingFunc,
     tag: str | None,
-) -> None:
+    books_dir: Path,
+    ad_hoc: bool,
+) -> str:
     """Ingest only new/changed books, remove deleted ones."""
-    actions = diff_manifest(manifest, config.library.books_dir, config.library.allowed_formats)
+    actions = diff_manifest(
+        manifest,
+        books_dir,
+        config.library.allowed_formats,
+        detect_removals=not ad_hoc,
+    )
 
     if not actions:
-        console.print("[green]Everything is up to date.[/green]")
-        return
+        msg = "Everything is up to date."
+        console.print(f"[green]{msg}[/green]")
+        return msg
 
     adds = [a for a in actions if a.action == "add"]
     updates = [a for a in actions if a.action == "update"]
@@ -147,6 +189,7 @@ def _incremental_ingest(
         remove_manifest_entry(manifest, action.filename)
 
     # Process adds and updates
+    resolved = str(books_dir.resolve())
     to_process = adds + updates
     if to_process:
         with Progress(
@@ -159,14 +202,16 @@ def _incremental_ingest(
             task = progress.add_task("Ingesting...", total=len(to_process))
             for action in to_process:
                 progress.update(task, description=f"Ingesting {action.filename}")
-                _process_book(config, manifest, db, embedder, action.path, action.filename, tag)
+                _process_book(config, manifest, db, embedder, action.path, action.filename, tag, resolved)
                 save_manifest(manifest, manifest_path)
                 progress.advance(task)
 
     manifest.embedding_model = config.embeddings.model
     manifest.db_path = str(config.library.db_path)
     save_manifest(manifest, manifest_path)
-    console.print(f"[green]Ingest complete.[/green] {len(manifest.books)} books indexed.")
+    msg = f"Ingest complete. {len(manifest.books)} books indexed."
+    console.print(f"[green]{msg}[/green]")
+    return msg
 
 
 def _ingest_single_file(
@@ -177,12 +222,14 @@ def _ingest_single_file(
     embedder: EmbeddingFunc,
     filename: str,
     tag: str | None,
-) -> None:
+    books_dir: Path,
+) -> str:
     """Ingest a specific file by name."""
-    path = config.library.books_dir / filename
+    path = books_dir / filename
     if not path.exists():
-        console.print(f"[red]File not found:[/red] {path}")
-        return
+        msg = f"File not found: {path}"
+        console.print(f"[red]{msg}[/red]")
+        return msg
 
     # Remove old version if it exists
     if filename in manifest.books:
@@ -190,13 +237,16 @@ def _ingest_single_file(
         db.delete_by_hash(old_hash)
         remove_manifest_entry(manifest, filename)
 
+    resolved = str(books_dir.resolve())
     with console.status(f"Ingesting {filename}..."):
-        _process_book(config, manifest, db, embedder, path, filename, tag)
+        _process_book(config, manifest, db, embedder, path, filename, tag, resolved)
 
     manifest.embedding_model = config.embeddings.model
     manifest.db_path = str(config.library.db_path)
     save_manifest(manifest, manifest_path)
-    console.print(f"[green]Done.[/green] {filename} ingested.")
+    msg = f"{filename} ingested."
+    console.print(f"[green]Done.[/green] {msg}")
+    return msg
 
 
 def _process_book(
@@ -207,6 +257,7 @@ def _process_book(
     path: Path,
     filename: str,
     tag: str | None,
+    source_dir: str = "",
 ) -> None:
     """Extract, chunk, embed, and store a single book."""
     file_hash = compute_file_hash(path)
@@ -263,6 +314,7 @@ def _process_book(
         chunk_count=len(chunks),
         file_size_bytes=path.stat().st_size,
         version_tag=tag,
+        source_dir=source_dir,
     )
 
     logger.info(f"Processed {filename}: {len(book.sections)} sections, {len(chunks)} chunks")

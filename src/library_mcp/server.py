@@ -149,6 +149,32 @@ async def get_chapter(book_title: str, section_title: str) -> str:
     )
 
 
+@mcp.tool()
+@_safe_tool
+async def ingest_path(path: str, file: str | None = None, tag: str | None = None) -> str:
+    """Ingest books from a directory or a specific file into the knowledge base.
+
+    Use this to add new reference material mid-session. After ingestion,
+    the new books become immediately searchable via search_library.
+
+    Args:
+        path: Absolute path to a directory of books, or a single book file.
+        file: Optional specific filename within the directory to ingest.
+        tag: Optional version tag for the ingested book(s).
+    """
+    _init()
+
+    from .ingest import run_ingest
+
+    result = run_ingest(path=path, file=file, tag=tag, config=_config)
+
+    # Re-initialize DB to pick up new chunks
+    global _db
+    _db = VectorDB(_config.library.db_path)
+
+    return json.dumps({"result": result, "path": path})
+
+
 def main():
     setup_logging()
     mcp.run(transport="stdio")

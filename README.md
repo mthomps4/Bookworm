@@ -41,7 +41,7 @@ When choosing which format to keep, prefer in this order:
 ### 3. Ingest
 
 ```bash
-library ingest
+bookworm ingest
 ```
 
 This scans `books/inbox/`, extracts text, chunks it, generates embeddings, and stores everything in a local ChromaDB database. You'll see a progress bar for each book.
@@ -49,15 +49,15 @@ This scans `books/inbox/`, extracts text, chunks it, generates embeddings, and s
 Verify it worked:
 
 ```bash
-library stats      # How many books/chunks are indexed
-library list       # Table of all indexed books
+bookworm stats      # How many books/chunks are indexed
+bookworm list       # Table of all indexed books
 ```
 
 Test a search from the command line:
 
 ```bash
-library search "error handling best practices"
-library search "dependency injection" --book "Clean Code" --top-k 3
+bookworm search "error handling best practices"
+bookworm search "dependency injection" --book "Clean Code" --top-k 3
 ```
 
 ### 4. Connect to Claude Code
@@ -99,8 +99,9 @@ Replace `/absolute/path/to/BookWorm` with the actual path on your machine. Using
 | `list_books()` | Shows what's in the library |
 | `search_library(query, book_filter?, top_k?)` | Semantic search across all books |
 | `get_chapter(book_title, section_title)` | Retrieves a full chapter for deeper reading |
+| `ingest_path(path, file?, tag?)` | Ingest books mid-session from any directory |
 
-Claude will call these autonomously when it thinks your library has relevant material.
+Claude will call these autonomously when it thinks your library has relevant material. The `ingest_path` tool lets Claude pull in new reference material on the fly without leaving the session.
 
 ### 5. Keep It Updated
 
@@ -108,23 +109,29 @@ BookWorm tracks file hashes, so re-running ingest is fast -- it only processes w
 
 ```bash
 # After adding or updating books:
-library ingest
+bookworm ingest
 
 # After removing a book file from inbox:
-library ingest          # Detects the removal, purges from DB
+bookworm ingest          # Detects the removal, purges from DB
 
 # Remove a specific book by title (without deleting the file):
-library remove "Clean Code"
+bookworm remove "Clean Code"
 
 # Add a new edition alongside the old:
-library ingest --file "clean-code-3rd.pdf" --tag "3rd-edition"
+bookworm ingest --file "clean-code-3rd.pdf" --tag "3rd-edition"
+
+# Ingest from another folder (GDrive, Dropbox, NAS, etc):
+bookworm ingest --path ~/Google\ Drive/Books
+bookworm ingest --path /mnt/nas/tech-library
 ```
+
+**Multi-folder ingestion:** Using `--path` accumulates books from multiple directories into the same DB. Books from other directories are never removed -- only additions and updates are processed. Each book tracks which directory it came from.
 
 **Full reindex** (when you want to start fresh):
 
 ```bash
-library rebuild         # Interactive confirmation, then wipes DB and re-ingests everything
-library ingest --full   # Same thing, no confirmation prompt
+bookworm rebuild         # Interactive confirmation, then wipes DB and re-ingests everything
+bookworm ingest --full   # Same thing, no confirmation prompt
 ```
 
 **When is a full reindex required?**
@@ -189,7 +196,7 @@ library:
   books_dir: "./books/inbox"              # Where to scan for books
   manifest_path: "./books/.manifest.json" # Tracks what's been indexed
   db_path: "./db"                         # ChromaDB storage
-  allowed_formats: ["pdf", "epub", "mobi"] # Remove formats to skip them
+  allowed_formats: ["pdf", "epub", "mobi", "md"] # Remove formats to skip them
 
 chunking:
   target_tokens: 600        # Target chunk size
@@ -232,17 +239,19 @@ All config values can be overridden via environment variables (ENV takes precede
 ## CLI Reference
 
 ```bash
-library ingest                              # Incremental: process new/changed, remove deleted
-library ingest --full                       # Full rebuild from scratch
-library ingest --file "book.pdf"            # Ingest one specific file
-library ingest --file "book.pdf" --tag "v2" # With a version tag
-library list                                # Table of indexed books
-library search "query"                      # Semantic search
-library search "query" --book "Title"       # Search within one book
-library search "query" --top-k 10           # More results
-library remove "Book Title"                 # Remove from index by title
-library stats                               # Chunk counts, DB size, model info
-library rebuild                             # Wipe and rebuild (with confirmation)
+bookworm ingest                              # Incremental: process new/changed, remove deleted
+bookworm ingest --full                       # Full rebuild from scratch
+bookworm ingest --file "book.pdf"            # Ingest one specific file
+bookworm ingest --file "book.pdf" --tag "v2" # With a version tag
+bookworm ingest --path ~/GDrive/Books        # Ingest from an external folder
+bookworm ingest --path ~/GDrive/Books --file "specific.epub"  # One file from external folder
+bookworm list                                # Table of indexed books
+bookworm search "query"                      # Semantic search
+bookworm search "query" --book "Title"       # Search within one book
+bookworm search "query" --top-k 10           # More results
+bookworm remove "Book Title"                 # Remove from index by title
+bookworm stats                               # Chunk counts, DB size, model info
+bookworm rebuild                             # Wipe and rebuild (with confirmation)
 ```
 
 ---

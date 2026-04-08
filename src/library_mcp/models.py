@@ -106,6 +106,7 @@ class ManifestEntry(BaseModel):
     ingested_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     file_size_bytes: int = 0
     ocr: bool = False
+    source_dir: str = ""
 
 
 class Manifest(BaseModel):

@@ -37,7 +37,7 @@ openai = ["openai"]
 dev = ["pytest", "pytest-cov"]
 
 [project.scripts]
-library = "library_mcp.cli:main"
+bookworm = "library_mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/library_mcp"]

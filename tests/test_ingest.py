@@ -139,3 +139,54 @@ def test_ingest_with_version_tag(populated_inbox):
 
     manifest = load_manifest(config.library.manifest_path)
     assert manifest.books["testing-guide.pdf"].version_tag == "v2"
+
+
+def test_ingest_from_alternate_path(populated_inbox, tmp_path):
+    """Ingesting from --path should accumulate without clobbering existing books."""
+    import fitz
+
+    config = populated_inbox
+
+    # First ingest from default inbox
+    run_ingest(config=config)
+    manifest = load_manifest(config.library.manifest_path)
+    assert len(manifest.books) == 1
+
+    # Create a second directory with a different book
+    alt_dir = tmp_path / "alt_books"
+    alt_dir.mkdir()
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "This is a completely different book about design patterns.")
+    doc.save(str(alt_dir / "design-patterns.pdf"))
+    doc.close()
+
+    # Ingest from the alternate path
+    run_ingest(path=str(alt_dir), config=config)
+
+    manifest = load_manifest(config.library.manifest_path)
+    assert len(manifest.books) == 2
+    assert "testing-guide.pdf" in manifest.books
+    assert "design-patterns.pdf" in manifest.books
+
+    db = VectorDB(config.library.db_path)
+    assert db.count() == manifest.books["testing-guide.pdf"].chunk_count + manifest.books["design-patterns.pdf"].chunk_count
+
+
+def test_ingest_from_path_does_not_remove_other_books(populated_inbox, tmp_path):
+    """Ingesting from --path should NOT remove books from other directories."""
+    config = populated_inbox
+
+    # Ingest from default inbox
+    run_ingest(config=config)
+
+    # Create an empty alternate directory
+    alt_dir = tmp_path / "empty_alt"
+    alt_dir.mkdir()
+
+    # Ingest from empty alt dir — should not purge the default inbox book
+    run_ingest(path=str(alt_dir), config=config)
+
+    manifest = load_manifest(config.library.manifest_path)
+    assert len(manifest.books) == 1
+    assert "testing-guide.pdf" in manifest.books
