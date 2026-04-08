@@ -1,0 +1,10 @@
+db/
+.env
+.git
+.gitignore
+__pycache__
+*.pyc
+books/inbox/*
+tests/
+.venv/
+plan.md

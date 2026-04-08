@@ -1,0 +1,31 @@
+services:
+  library-mcp:
+    build: .
+    container_name: library-mcp
+    env_file: .env
+    volumes:
+      - ${BOOKS_PATH:-./books/inbox}:/data/books:ro
+      - ${CHROMA_PATH:-./db}:/data/db
+      - ${MANIFEST_PATH:-./books}:/data/manifest
+    environment:
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-local}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+  # One-shot ingest service — run with: docker compose run --rm ingest
+  ingest:
+    build: .
+    container_name: library-ingest
+    env_file: .env
+    volumes:
+      - ${BOOKS_PATH:-./books/inbox}:/data/books:ro
+      - ${CHROMA_PATH:-./db}:/data/db
+      - ${MANIFEST_PATH:-./books}:/data/manifest
+    environment:
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-local}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    entrypoint: ["python", "-m", "library_mcp.cli", "ingest"]
+    profiles: ["cli"]

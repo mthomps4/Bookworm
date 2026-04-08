@@ -1,0 +1,28 @@
+# Library MCP Configuration
+
+library:
+  books_dir: "./books/inbox"
+  manifest_path: "./books/.manifest.json"
+  db_path: "./db"
+  allowed_formats: ["pdf", "epub", "mobi"]  # Remove formats to skip them
+
+chunking:
+  target_tokens: 600
+  max_tokens: 800
+  overlap_tokens: 75
+  respect_paragraphs: true
+  respect_sections: true
+
+embeddings:
+  provider: "local"
+  model: "all-MiniLM-L6-v2"
+  batch_size: 64
+
+search:
+  default_top_k: 5
+  max_top_k: 20
+  relevance_threshold: 0.3
+
+server:
+  name: "library-mcp"
+  transport: "stdio"
