@@ -1,7 +1,7 @@
 services:
-  library-mcp:
+  bookworm:
     build: .
-    container_name: library-mcp
+    container_name: bookworm
     env_file: .env
     volumes:
       - ${BOOKS_PATH:-./books/inbox}:/data/books:ro

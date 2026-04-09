@@ -1,9 +1,9 @@
 {
-  "_comment": "Docker variant. Copy the 'library-mcp' entry into ~/.claude/settings.json (global) or .claude/settings.json (project). Adjust the docker-compose.yml path for the target machine.",
+  "_comment": "Docker variant. Copy the 'bookworm' entry into ~/.mcp.json (global) or <project>/.mcp.json (project). Adjust the docker-compose.yml path for the target machine.",
   "mcpServers": {
-    "library-mcp": {
+    "bookworm": {
       "command": "docker",
-      "args": ["compose", "-f", "/CHANGE_ME/to/BookWorm/docker-compose.yml", "run", "--rm", "-T", "library-mcp"],
+      "args": ["compose", "-f", "/CHANGE_ME/to/BookWorm/docker-compose.yml", "run", "--rm", "-T", "bookworm"],
       "env": {
         "OPENAI_API_KEY": ""
       }

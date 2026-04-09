@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "library-mcp"
+name = "bookworm-mcp"
 version = "0.1.0"
 description = "MCP server for semantic search over a personal ebook library"
 requires-python = ">=3.11"

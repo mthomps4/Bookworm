@@ -45,7 +45,7 @@ class SearchConfig(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    name: str = "library-mcp"
+    name: str = "bookworm"
     transport: str = "stdio"
 
 

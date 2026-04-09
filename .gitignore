@@ -18,6 +18,9 @@ books/.manifest.json
 .vscode/
 .idea/
 
+# Claude Code / AI tooling
+.expert/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -18,7 +18,7 @@ from .manifest import load_manifest
 logger = logging.getLogger(__name__)
 
 # Initialize server
-mcp = FastMCP("library-mcp")
+mcp = FastMCP("bookworm")
 
 # Lazy-init globals — created on first tool call
 _config = None

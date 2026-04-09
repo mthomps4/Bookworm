@@ -24,5 +24,5 @@ search:
   relevance_threshold: 0.3
 
 server:
-  name: "library-mcp"
+  name: "bookworm"
   transport: "stdio"

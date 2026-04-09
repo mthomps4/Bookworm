@@ -1,4 +1,4 @@
-"""Centralized logging configuration for library-mcp."""
+"""Centralized logging configuration for BookWorm."""
 
 from __future__ import annotations
 

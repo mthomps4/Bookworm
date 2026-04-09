@@ -1,7 +1,7 @@
 {
-  "_comment": "Copy the 'library-mcp' entry into ~/.claude/settings.json (global) or .claude/settings.json (project). Adjust 'cwd' to this repo's absolute path on the target machine.",
+  "_comment": "Copy the 'bookworm' entry into ~/.mcp.json (global) or <project>/.mcp.json (project). Adjust 'cwd' to this repo's absolute path on the target machine.",
   "mcpServers": {
-    "library-mcp": {
+    "bookworm": {
       "command": "python",
       "args": ["-m", "library_mcp.server"],
       "cwd": "/CHANGE_ME/to/BookWorm",

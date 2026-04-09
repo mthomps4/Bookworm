@@ -60,23 +60,32 @@ bookworm search "error handling best practices"
 bookworm search "dependency injection" --book "Clean Code" --top-k 3
 ```
 
-### 4. Connect to Claude Code
+### 4. Shell Alias
 
-This is what makes it useful -- Claude will automatically search your library when it needs reference material.
+Add the alias to your shell config so you can run `bookworm` from anywhere:
 
-Add the MCP server config to **one** of these locations:
+```bash
+# ~/.zshrc or ~/.bashrc
+alias bookworm="$HOME/Code/BookWorm/.venv/bin/bookworm"
+```
+
+Then reload: `source ~/.zshrc`
+
+### 5. Connect to Claude Code
+
+BookWorm runs as an MCP server -- Claude Code spawns it automatically and calls its tools when it needs reference material.
+
+Add the MCP config to **one** of these locations:
 
 | Scope | File | When to use |
 |-------|------|-------------|
-| Global (all projects) | `~/.claude/settings.json` | You want your library everywhere |
-| Project-only | `<project>/.claude/settings.json` | Scoped to one codebase |
-
-Add the `mcpServers` block (create the file if it doesn't exist):
+| Global (all projects) | `~/.mcp.json` | You want your library everywhere |
+| Project-only | `<project>/.mcp.json` | Scoped to one codebase |
 
 ```json
 {
   "mcpServers": {
-    "library-mcp": {
+    "bookworm": {
       "command": "/absolute/path/to/BookWorm/.venv/bin/python",
       "args": ["-m", "library_mcp.server"],
       "cwd": "/absolute/path/to/BookWorm",
@@ -88,11 +97,15 @@ Add the `mcpServers` block (create the file if it doesn't exist):
 }
 ```
 
-Replace `/absolute/path/to/BookWorm` with the actual path on your machine. Using the venv's Python ensures dependencies are available.
+Replace `/absolute/path/to/BookWorm` with the actual path on your machine.
 
-> **Note:** The bundled `claude-code-config.json` and `claude-code-config-docker.json` templates contain `CHANGE_ME` placeholders -- update the paths for your machine before copying into your Claude Code settings.
+> **Note:** The bundled `claude-code-config.json` and `claude-code-config-docker.json` templates contain `CHANGE_ME` placeholders -- update the paths for your machine before copying.
 
-**Restart Claude Code** (or start a new session). You should see the `library-mcp` tools become available. Claude now has access to:
+**Restart Claude Code** (or start a new session). The `bookworm` MCP tools become available automatically.
+
+### Claude Code MCP Tools
+
+These are the tools Claude can call autonomously during a session:
 
 | Tool | What it does |
 |------|--------------|
@@ -101,9 +114,30 @@ Replace `/absolute/path/to/BookWorm` with the actual path on your machine. Using
 | `get_chapter(book_title, section_title)` | Retrieves a full chapter for deeper reading |
 | `ingest_path(path, file?, tag?)` | Ingest books mid-session from any directory |
 
-Claude will call these autonomously when it thinks your library has relevant material. The `ingest_path` tool lets Claude pull in new reference material on the fly without leaving the session.
+Claude calls these on its own when it thinks your library has relevant material. You can also ask directly -- e.g. "search my books for GenServer patterns" or "ingest the books at ~/Downloads/elixir-books".
 
-### 5. Keep It Updated
+### Common Workflows
+
+**From the terminal (CLI):**
+
+```bash
+bookworm ingest                              # Scan inbox, process new/changed books
+bookworm ingest --path ~/Books/elixir        # Ingest from a specific directory
+bookworm list                                # See what's indexed
+bookworm search "pattern matching"           # Quick search
+bookworm stats                               # Index health check
+```
+
+**From a Claude Code session (MCP tools):**
+
+- "What books do I have indexed?" -- calls `list_books`
+- "Search my library for Ecto multi-tenancy" -- calls `search_library`
+- "Pull up the chapter on GenServers from that Elixir book" -- calls `get_chapter`
+- "Ingest the PDFs at ~/Downloads/phoenix-books" -- calls `ingest_path`
+
+The MCP tools and CLI share the same database, so books ingested from either side are immediately available to both.
+
+### 6. Keep It Updated
 
 BookWorm tracks file hashes, so re-running ingest is fast -- it only processes what changed.
 
@@ -166,9 +200,9 @@ docker compose run --rm ingest stats
 ```json
 {
   "mcpServers": {
-    "library-mcp": {
+    "bookworm": {
       "command": "docker",
-      "args": ["compose", "-f", "/absolute/path/to/BookWorm/docker-compose.yml", "run", "--rm", "-T", "library-mcp"]
+      "args": ["compose", "-f", "/absolute/path/to/BookWorm/docker-compose.yml", "run", "--rm", "-T", "bookworm"]
     }
   }
 }
