@@ -16,7 +16,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
-This installs the `library` CLI and all dependencies (pymupdf, chromadb, sentence-transformers, etc). First run will download the embedding model (~80MB).
+This installs the `bookworm` CLI and all dependencies (pymupdf, chromadb, sentence-transformers, etc). First run will download the embedding model (~80MB).
 
 ### 2. Add Your Books
 
@@ -36,7 +36,6 @@ When choosing which format to keep, prefer in this order:
 | 1st | **EPUB** | Cleanest text extraction, chapter boundaries from TOC, smallest files |
 | 2nd | **PDF** | Good with TOC-based chapter detection; OCR fallback for scanned pages |
 | 3rd | **MOBI** | Gets converted to EPUB internally -- if you have the EPUB, use that instead |
-| -- | **Markdown** | Native support -- splits on headings for sections, no conversion needed |
 
 ### 3. Ingest
 
@@ -73,7 +72,7 @@ Then reload: `source ~/.zshrc`
 
 ### 5. Connect to Claude Code
 
-BookWorm runs as an MCP server -- Claude Code spawns it automatically and calls its tools when it needs reference material.
+BookWorm runs as an MCP server -- Claude Code spawns it as a local subprocess and communicates over stdio.
 
 Add the MCP config to **one** of these locations:
 
@@ -97,9 +96,7 @@ Add the MCP config to **one** of these locations:
 }
 ```
 
-Replace `/absolute/path/to/BookWorm` with the actual path on your machine.
-
-> **Note:** The bundled `claude-code-config.json` and `claude-code-config-docker.json` templates contain `CHANGE_ME` placeholders -- update the paths for your machine before copying.
+Replace `/absolute/path/to/BookWorm` with the actual path on your machine. A template is provided in `claude-code-config.json`.
 
 **Restart Claude Code** (or start a new session). The `bookworm` MCP tools become available automatically.
 
@@ -177,51 +174,7 @@ BookWorm will warn you and refuse to do an incremental ingest if it detects an e
 
 ---
 
-## Docker Setup
-
-For a more portable setup, or if you don't want to install Python dependencies on the host:
-
-```bash
-cp .env.example .env    # Edit paths to match your machine
-docker compose build    # First build downloads the embedding model into the image
-
-# Ingest
-docker compose run --rm ingest
-docker compose run --rm ingest --full
-
-# Other CLI commands
-docker compose run --rm ingest list
-docker compose run --rm ingest search "error handling" --top-k 5
-docker compose run --rm ingest stats
-```
-
-### Docker + Claude Code
-
-```json
-{
-  "mcpServers": {
-    "bookworm": {
-      "command": "docker",
-      "args": ["compose", "-f", "/absolute/path/to/BookWorm/docker-compose.yml", "run", "--rm", "-T", "bookworm"]
-    }
-  }
-}
-```
-
-The `-T` flag is required -- it disables TTY allocation for stdio transport.
-
-### Multi-Machine Workflow
-
-1. Push repo to GitHub (books and DB are gitignored)
-2. On new machine: `git clone` then `cp .env.example .env`
-3. Edit `.env` to point `BOOKS_PATH` at your local books folder (iCloud, Dropbox, NAS, wherever)
-4. `docker compose build && docker compose run --rm ingest`
-5. Add MCP config to Claude Code settings
-6. Done -- same image, different books, different machine
-
----
-
-## Configuration Reference
+## Configuration
 
 ### config.yaml
 
@@ -230,7 +183,7 @@ library:
   books_dir: "./books/inbox"              # Where to scan for books
   manifest_path: "./books/.manifest.json" # Tracks what's been indexed
   db_path: "./db"                         # ChromaDB storage
-  allowed_formats: ["pdf", "epub", "mobi", "md"] # Remove formats to skip them
+  allowed_formats: ["pdf", "epub", "mobi"] # Remove formats to skip them
 
 chunking:
   target_tokens: 600        # Target chunk size
@@ -252,7 +205,7 @@ search:
 
 ### Environment Variables
 
-All config values can be overridden via environment variables (ENV takes precedence). Copy `.env.example` to `.env`:
+All config values can be overridden via environment variables (ENV takes precedence):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -312,8 +265,6 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
-71 tests covering extraction, chunking, DB operations, manifest diffing, ingest pipeline, and end-to-end search.
-
 ---
 
 ## Project Structure
@@ -335,6 +286,5 @@ BookWorm/
 ├── books/inbox/           # Drop books here
 ├── tests/                 # Test suite
 ├── config.yaml            # Default configuration
-├── Dockerfile             # Multi-stage build
-└── docker-compose.yml     # Server + ingest services
+└── claude-code-config.json # MCP config template
 ```
