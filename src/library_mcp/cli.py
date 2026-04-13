@@ -95,6 +95,85 @@ def search(
 
 
 @app.command()
+def toc(
+    title: str = typer.Argument(..., help="Book title to show table of contents for"),
+) -> None:
+    """Show the table of contents (sections) for a book."""
+    config = load_config()
+    db = VectorDB(config.library.db_path)
+
+    sections = db.get_sections(title)
+
+    if not sections:
+        # Try case-insensitive match from manifest
+        manifest = load_manifest(config.library.manifest_path)
+        matched = None
+        for entry in manifest.books.values():
+            if entry.title.lower() == title.lower():
+                matched = entry.title
+                break
+        if matched:
+            sections = db.get_sections(matched)
+            title = matched
+
+    if not sections:
+        console.print(f"[red]Book not found:[/red] {title}")
+        manifest = load_manifest(config.library.manifest_path)
+        if manifest.books:
+            console.print("Indexed books:")
+            for entry in manifest.books.values():
+                console.print(f"  • {entry.title}")
+        return
+
+    table = Table(title=f"Table of Contents: {title}")
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Section", style="bold")
+    table.add_column("Chunks", justify="right")
+    table.add_column("Page", justify="right")
+
+    for i, section in enumerate(sections, 1):
+        page = str(section["page_number"]) if section["page_number"] else "—"
+        table.add_row(str(i), section["section_title"], str(section["chunk_count"]), page)
+
+    console.print(table)
+
+
+@app.command()
+def status() -> None:
+    """Show library status: indexed books, pending files, and health info."""
+    config = load_config()
+    manifest = load_manifest(config.library.manifest_path)
+    db = VectorDB(config.library.db_path)
+
+    from .manifest import scan_books_dir
+
+    on_disk = scan_books_dir(config.library.books_dir, config.library.allowed_formats)
+    indexed_files = set(manifest.books.keys())
+    pending = sorted(f for f in on_disk if f not in indexed_files)
+
+    total_chunks = db.count()
+    total_books = len(manifest.books)
+    total_size = sum(e.file_size_bytes for e in manifest.books.values())
+
+    console.print(f"\n[bold]Library Status[/bold]")
+    console.print(f"  Books indexed:    [green]{total_books}[/green]")
+    console.print(f"  Total chunks:     {total_chunks}")
+    console.print(f"  Source file size: {total_size / (1024*1024):.1f} MB")
+    console.print(f"  Embedding model:  {manifest.embedding_model}")
+    console.print(f"  DB path:          {config.library.db_path}")
+    console.print(f"  Inbox path:       {config.library.books_dir}")
+    if manifest.last_full_ingest:
+        console.print(f"  Last full ingest: {manifest.last_full_ingest[:19]}")
+
+    if pending:
+        console.print(f"\n[yellow]Pending ({len(pending)} books not yet indexed):[/yellow]")
+        for f in pending:
+            console.print(f"  • {f}")
+    else:
+        console.print(f"\n[green]All books in inbox are indexed.[/green]")
+
+
+@app.command()
 def remove(
     title: str = typer.Argument(..., help="Book title to remove"),
 ) -> None:

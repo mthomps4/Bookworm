@@ -141,6 +141,35 @@ class VectorDB:
             for doc, meta in paired
         ]
 
+    def get_sections(self, book_title: str) -> list[dict]:
+        """Get all section titles for a book with chunk counts, in reading order."""
+        results = self._collection.get(
+            where={"book_title": book_title},
+            include=["metadatas"],
+        )
+
+        if not results["metadatas"]:
+            return []
+
+        # Group by section_title, tracking min chunk_index and count
+        sections: dict[str, dict] = {}
+        for meta in results["metadatas"]:
+            title = meta["section_title"]
+            if title not in sections:
+                sections[title] = {
+                    "section_title": title,
+                    "chunk_count": 0,
+                    "first_chunk_index": meta["chunk_index"],
+                    "page_number": meta["page_number"] if meta["page_number"] != -1 else None,
+                }
+            sections[title]["chunk_count"] += 1
+            sections[title]["first_chunk_index"] = min(
+                sections[title]["first_chunk_index"], meta["chunk_index"]
+            )
+
+        # Sort by first_chunk_index to preserve reading order
+        return sorted(sections.values(), key=lambda s: s["first_chunk_index"])
+
     def get_all_book_titles(self) -> list[str]:
         """Get distinct book titles in the collection."""
         if self._collection.count() == 0:

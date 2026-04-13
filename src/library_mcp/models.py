@@ -21,7 +21,7 @@ class LibraryConfig(BaseModel):
     books_dir: Path = Path("./books/inbox")
     manifest_path: Path = Path("./books/.manifest.json")
     db_path: Path = Path("./db")
-    allowed_formats: list[str] = Field(default_factory=lambda: ["pdf", "epub", "mobi", "md"])
+    allowed_formats: list[str] = Field(default_factory=lambda: ["pdf", "epub", "mobi", "md", "txt", "html"])
 
 
 class ChunkingConfig(BaseModel):
@@ -65,6 +65,8 @@ class BookFormat(str, Enum):
     EPUB = "epub"
     MOBI = "mobi"
     MARKDOWN = "md"
+    TXT = "txt"
+    HTML = "html"
 
 
 class Section(BaseModel):

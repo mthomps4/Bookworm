@@ -76,9 +76,11 @@ def test_scan_books_dir(tmp_path):
     (tmp_path / "book3.mobi").write_bytes(b"mobi")
     (tmp_path / "book4.md").write_bytes(b"md")
     (tmp_path / "notes.txt").write_bytes(b"txt")
+    (tmp_path / "page.html").write_bytes(b"html")
+    (tmp_path / "ignore.docx").write_bytes(b"docx")
 
     books = scan_books_dir(tmp_path)
-    assert set(books.keys()) == {"book1.pdf", "book2.epub", "book3.mobi", "book4.md"}
+    assert set(books.keys()) == {"book1.pdf", "book2.epub", "book3.mobi", "book4.md", "notes.txt", "page.html"}
 
 
 def test_scan_books_dir_empty(tmp_path):

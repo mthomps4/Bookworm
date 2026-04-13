@@ -12,7 +12,7 @@ from .models import Manifest, ManifestEntry
 
 logger = logging.getLogger(__name__)
 
-ALL_SUPPORTED_EXTENSIONS = {".pdf", ".epub", ".mobi", ".md"}
+ALL_SUPPORTED_EXTENSIONS = {".pdf", ".epub", ".mobi", ".md", ".txt", ".html", ".htm"}
 
 
 def _allowed_extensions(allowed_formats: list[str] | None = None) -> set[str]:

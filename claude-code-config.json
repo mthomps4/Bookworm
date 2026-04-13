@@ -1,14 +1,44 @@
 {
-  "_comment": "Copy the 'bookworm' entry into ~/.mcp.json (global) or <project>/.mcp.json (project). Adjust 'cwd' to this repo's absolute path on the target machine.",
+  "_comment_1": "== MCP Server ==",
+  "_comment_2": "Copy the 'bookworm' entry into ~/.mcp.json (global) or <project>/.mcp.json (project).",
+  "_comment_3": "Replace /CHANGE_ME/to/BookWorm with the actual absolute path on your machine.",
+
   "mcpServers": {
     "bookworm": {
-      "command": "python",
+      "command": "/CHANGE_ME/to/BookWorm/.venv/bin/python",
       "args": ["-m", "library_mcp.server"],
       "cwd": "/CHANGE_ME/to/BookWorm",
       "env": {
-        "PYTHONPATH": "/CHANGE_ME/to/BookWorm/src",
-        "OPENAI_API_KEY": ""
+        "PYTHONPATH": "/CHANGE_ME/to/BookWorm/src"
       }
     }
+  },
+
+  "_comment_4": "== Claude Code Settings (~/.claude/settings.json) ==",
+  "_comment_5": "Merge these entries into your existing settings.json.",
+
+  "permissions": {
+    "allow": [
+      "mcp__bookworm__list_books",
+      "mcp__bookworm__search_library",
+      "mcp__bookworm__get_chapter",
+      "mcp__bookworm__list_sections",
+      "mcp__bookworm__get_stats",
+      "mcp__bookworm__ingest_path",
+      "mcp__bookworm__remove_book"
+    ]
+  },
+
+  "extraKnownMarketplaces": {
+    "bookworm-local": {
+      "source": {
+        "source": "directory",
+        "path": "/CHANGE_ME/to/BookWorm"
+      }
+    }
+  },
+
+  "enabledPlugins": {
+    "bookworm@bookworm-local": true
   }
 }

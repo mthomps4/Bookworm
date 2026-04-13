@@ -2,7 +2,7 @@
 
 A local MCP server that turns your ebook library into a searchable knowledge base. Drop books into a folder, run ingest, and Claude Code automatically searches relevant passages when it needs reference material.
 
-Supports PDF, EPUB, and MOBI. Runs entirely locally -- no external API required.
+Supports PDF, EPUB, MOBI, Markdown, plain text, and HTML. Runs entirely locally -- no external API required.
 
 ---
 
@@ -27,6 +27,8 @@ cp ~/Books/clean-code.epub books/inbox/
 cp ~/Books/designing-data-intensive-apps.pdf books/inbox/
 ```
 
+**Supported formats:** EPUB, PDF, MOBI, Markdown (.md), plain text (.txt), HTML (.html/.htm)
+
 **Duplicate formats:** If you have the same book as `clean-code.pdf`, `clean-code.epub`, and `clean-code.mobi`, only add **one** to the inbox. Indexing the same book in multiple formats produces duplicate search results.
 
 When choosing which format to keep, prefer in this order:
@@ -36,6 +38,9 @@ When choosing which format to keep, prefer in this order:
 | 1st | **EPUB** | Cleanest text extraction, chapter boundaries from TOC, smallest files |
 | 2nd | **PDF** | Good with TOC-based chapter detection; OCR fallback for scanned pages |
 | 3rd | **MOBI** | Gets converted to EPUB internally -- if you have the EPUB, use that instead |
+| 4th | **Markdown** | Split on heading levels (# ## ###) |
+| 5th | **HTML** | Split on heading elements (h1/h2/h3), extracts title and author meta |
+| 6th | **TXT** | Detects chapter headings or falls back to fixed-size sections |
 
 ### 3. Ingest
 
@@ -98,9 +103,74 @@ Add the MCP config to **one** of these locations:
 
 Replace `/absolute/path/to/BookWorm` with the actual path on your machine. A template is provided in `claude-code-config.json`.
 
-**Restart Claude Code** (or start a new session). The `bookworm` MCP tools become available automatically.
+**Restart the MCP server** by running `/mcp` in Claude Code and selecting the bookworm server to restart, or start a new session.
 
-### Claude Code MCP Tools
+### 6. Install the Plugin (Skills & Slash Commands)
+
+BookWorm includes a Claude Code plugin with slash commands for interactive library use.
+
+**Quick start (load for one session only):**
+
+```bash
+claude --plugin-dir /path/to/BookWorm
+```
+
+**Permanent install** — add these two entries to `~/.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "bookworm-local": {
+      "source": {
+        "source": "directory",
+        "path": "/absolute/path/to/BookWorm"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "bookworm@bookworm-local": true
+  }
+}
+```
+
+Replace `/absolute/path/to/BookWorm` with the actual path on your machine. Start a new Claude Code session to pick up the plugin (a simple restart is all it takes — no separate MCP restart needed either, since both the MCP server and plugin load on session start).
+
+### 7. Auto-Allow Bookworm Tools (optional)
+
+By default, Claude Code will prompt for permission each time it calls a Bookworm MCP tool. Since these are all read-only operations against your local library, you can auto-allow them. Add this to `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__bookworm__list_books",
+      "mcp__bookworm__search_library",
+      "mcp__bookworm__get_chapter",
+      "mcp__bookworm__list_sections",
+      "mcp__bookworm__get_stats",
+      "mcp__bookworm__ingest_path",
+      "mcp__bookworm__remove_book"
+    ]
+  }
+}
+```
+
+All three snippets (MCP server, plugin registration, and permissions) are available in `claude-code-config.json` for easy reference.
+
+This makes the following slash commands available:
+
+| Command | What it does |
+|---------|--------------|
+| `/bw <query>` | Smart search — groups results by book, auto-drills into top matches, suggests follow-ups |
+| `/bw-research <topic>` | Deep multi-pass research — 3-5 query reformulations, chapter retrieval, synthesized report with citations |
+| `/bw-read <book>` | Browse a book — shows TOC, navigate chapters, get summaries |
+| `/bw-ingest [path]` | Interactive ingestion — shows pending books, ingests, confirms results |
+
+There's also a **model-invoked skill** (`bookworm-assist`) that fires automatically when your conversation involves topics covered by your library (Elixir, Phoenix, Vim, etc). No slash command needed — Claude uses it on its own.
+
+---
+
+## MCP Tools
 
 These are the tools Claude can call autonomously during a session:
 
@@ -109,11 +179,16 @@ These are the tools Claude can call autonomously during a session:
 | `list_books()` | Shows what's in the library |
 | `search_library(query, book_filter?, top_k?)` | Semantic search across all books |
 | `get_chapter(book_title, section_title)` | Retrieves a full chapter for deeper reading |
+| `list_sections(book_title)` | Returns the table of contents for a book (section names, chunk counts, page numbers) |
+| `get_stats()` | Library statistics: book count, chunks, storage size, pending files |
+| `remove_book(book_title)` | Remove a book from the index by title |
 | `ingest_path(path, file?, tag?)` | Ingest books mid-session from any directory |
 
 Claude calls these on its own when it thinks your library has relevant material. You can also ask directly -- e.g. "search my books for GenServer patterns" or "ingest the books at ~/Downloads/elixir-books".
 
-### Common Workflows
+---
+
+## Common Workflows
 
 **From the terminal (CLI):**
 
@@ -122,19 +197,33 @@ bookworm ingest                              # Scan inbox, process new/changed b
 bookworm ingest --path ~/Books/elixir        # Ingest from a specific directory
 bookworm list                                # See what's indexed
 bookworm search "pattern matching"           # Quick search
-bookworm stats                               # Index health check
+bookworm toc "Programming Phoenix ≥ 1.4"    # Show table of contents for a book
+bookworm status                              # Indexed vs pending, DB size, health info
+bookworm stats                               # Chunk counts, DB size, model info
 ```
 
 **From a Claude Code session (MCP tools):**
 
 - "What books do I have indexed?" -- calls `list_books`
 - "Search my library for Ecto multi-tenancy" -- calls `search_library`
+- "Show me the chapters in that Phoenix book" -- calls `list_sections`
 - "Pull up the chapter on GenServers from that Elixir book" -- calls `get_chapter`
 - "Ingest the PDFs at ~/Downloads/phoenix-books" -- calls `ingest_path`
+- "How big is my library?" -- calls `get_stats`
+- "Remove that outdated Vim book" -- calls `remove_book`
 
-The MCP tools and CLI share the same database, so books ingested from either side are immediately available to both.
+**From Claude Code slash commands (plugin):**
 
-### 6. Keep It Updated
+- `/bw GenServer patterns` -- smart search with auto-drill
+- `/bw-research "testing in Elixir"` -- deep research across multiple books
+- `/bw-read "Practical Vim"` -- browse a book's TOC and chapters
+- `/bw-ingest` -- see what's pending and ingest interactively
+
+The MCP tools, CLI, and slash commands all share the same database, so books ingested from any side are immediately available to all.
+
+---
+
+## Keep It Updated
 
 BookWorm tracks file hashes, so re-running ingest is fast -- it only processes what changed.
 
@@ -183,7 +272,7 @@ library:
   books_dir: "./books/inbox"              # Where to scan for books
   manifest_path: "./books/.manifest.json" # Tracks what's been indexed
   db_path: "./db"                         # ChromaDB storage
-  allowed_formats: ["pdf", "epub", "mobi"] # Remove formats to skip them
+  allowed_formats: ["pdf", "epub", "mobi", "md", "txt", "html"]
 
 chunking:
   target_tokens: 600        # Target chunk size
@@ -212,7 +301,7 @@ All config values can be overridden via environment variables (ENV takes precede
 | `BOOKS_PATH` | `./books/inbox` | Where to scan for books |
 | `CHROMA_PATH` | `./db` | ChromaDB storage location |
 | `MANIFEST_PATH` | `./books/.manifest.json` | Manifest file location |
-| `ALLOWED_FORMATS` | `pdf,epub,mobi` | Comma-separated list of formats to index |
+| `ALLOWED_FORMATS` | `pdf,epub,mobi,md,txt,html` | Comma-separated list of formats to index |
 | `EMBEDDING_PROVIDER` | `local` | `local` or `openai` |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Embedding model name |
 | `OPENAI_API_KEY` | -- | Required only if provider is `openai` |
@@ -236,6 +325,8 @@ bookworm list                                # Table of indexed books
 bookworm search "query"                      # Semantic search
 bookworm search "query" --book "Title"       # Search within one book
 bookworm search "query" --top-k 10           # More results
+bookworm toc "Book Title"                    # Show table of contents for a book
+bookworm status                              # Indexed vs pending, health dashboard
 bookworm remove "Book Title"                 # Remove from index by title
 bookworm stats                               # Chunk counts, DB size, model info
 bookworm rebuild                             # Wipe and rebuild (with confirmation)
@@ -246,8 +337,8 @@ bookworm rebuild                             # Wipe and rebuild (with confirmati
 ## How It Works
 
 ```
-Books (PDF/EPUB/MOBI)
-  -> Extract text (pymupdf, ebooklib, OCR fallback)
+Books (PDF/EPUB/MOBI/MD/TXT/HTML)
+  -> Extract text (pymupdf, ebooklib, BeautifulSoup, OCR fallback)
   -> Chunk (500-800 tokens, overlap, paragraph-aware)
   -> Embed (sentence-transformers locally, or OpenAI)
   -> Store in ChromaDB with metadata (title, author, section, page)
@@ -272,9 +363,9 @@ pytest tests/ -v
 ```
 BookWorm/
 ├── src/library_mcp/
-│   ├── server.py          # MCP server -- tool definitions
+│   ├── server.py          # MCP server -- tool definitions (7 tools)
 │   ├── ingest.py          # Ingestion pipeline orchestrator
-│   ├── extract.py         # PDF, EPUB, MOBI text extraction
+│   ├── extract.py         # PDF, EPUB, MOBI, MD, TXT, HTML text extraction
 │   ├── chunker.py         # Text chunking with overlap
 │   ├── embeddings.py      # Pluggable embedding providers
 │   ├── db.py              # ChromaDB wrapper
@@ -283,8 +374,15 @@ BookWorm/
 │   ├── config.py          # Config loading (YAML + ENV)
 │   ├── cli.py             # Typer CLI commands
 │   └── logging_config.py  # Centralized logging
+├── skills/                # Claude Code plugin skills
+│   ├── bw/                # /bw — smart library search
+│   ├── bw-research/       # /bw-research — deep multi-pass research
+│   ├── bw-read/           # /bw-read — browse and read a book
+│   ├── bw-ingest/         # /bw-ingest — interactive ingestion
+│   └── bookworm-assist/   # Auto-invoked when topics match library
+├── .claude-plugin/        # Claude Code plugin metadata
 ├── books/inbox/           # Drop books here
-├── tests/                 # Test suite
+├── tests/                 # Test suite (79 tests)
 ├── config.yaml            # Default configuration
 └── claude-code-config.json # MCP config template
 ```

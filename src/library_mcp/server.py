@@ -151,6 +151,121 @@ async def get_chapter(book_title: str, section_title: str) -> str:
 
 @mcp.tool()
 @_safe_tool
+async def list_sections(book_title: str) -> str:
+    """List all sections/chapters in a book with chunk counts, in reading order.
+
+    Use this to discover a book's table of contents before
+    drilling into a specific chapter with get_chapter.
+
+    Args:
+        book_title: The exact title of the book.
+    """
+    _init()
+
+    sections = _db.get_sections(book_title)
+
+    if not sections:
+        # Help the user by showing available titles
+        manifest = load_manifest(_manifest_path)
+        available = [e.title for e in manifest.books.values()]
+        return json.dumps({
+            "sections": [],
+            "message": f"No sections found for '{book_title}'.",
+            "available_books": available,
+        })
+
+    return json.dumps(
+        {
+            "book_title": book_title,
+            "sections": sections,
+            "total_sections": len(sections),
+        },
+        indent=2,
+    )
+
+
+@mcp.tool()
+@_safe_tool
+async def remove_book(book_title: str) -> str:
+    """Remove a book from the knowledge base by title.
+
+    Use this to clean up the library — for example, removing
+    outdated editions or books that are no longer needed.
+
+    Args:
+        book_title: The title of the book to remove (case-insensitive match).
+    """
+    _init()
+
+    manifest = load_manifest(_manifest_path)
+
+    # Find by case-insensitive title match
+    found_filename = None
+    for filename, entry in manifest.books.items():
+        if entry.title.lower() == book_title.lower():
+            found_filename = filename
+            break
+
+    if not found_filename:
+        available = [e.title for e in manifest.books.values()]
+        return json.dumps({
+            "removed": False,
+            "message": f"Book not found: '{book_title}'",
+            "available_books": available,
+        })
+
+    entry = manifest.books[found_filename]
+    deleted_count = _db.delete_by_hash(entry.file_hash)
+
+    from .manifest import remove_manifest_entry, save_manifest
+    remove_manifest_entry(manifest, found_filename)
+    save_manifest(manifest, _manifest_path)
+
+    return json.dumps({
+        "removed": True,
+        "title": entry.title,
+        "author": entry.author,
+        "chunks_deleted": deleted_count,
+    })
+
+
+@mcp.tool()
+@_safe_tool
+async def get_stats() -> str:
+    """Get library statistics: book count, chunk count, storage size, model info.
+
+    Use this to understand the current state of the knowledge base.
+    """
+    _init()
+
+    manifest = load_manifest(_manifest_path)
+    total_chunks = _db.count()
+    total_books = len(manifest.books)
+    total_size = sum(e.file_size_bytes for e in manifest.books.values())
+
+    # Count unindexed books in inbox
+    from .manifest import scan_books_dir
+    on_disk = scan_books_dir(_config.library.books_dir, _config.library.allowed_formats)
+    indexed_files = set(manifest.books.keys())
+    pending = [f for f in on_disk if f not in indexed_files]
+
+    return json.dumps(
+        {
+            "total_books": total_books,
+            "total_chunks": total_chunks,
+            "source_size_mb": round(total_size / (1024 * 1024), 1),
+            "embedding_model": manifest.embedding_model,
+            "db_path": str(_config.library.db_path),
+            "last_full_ingest": manifest.last_full_ingest,
+            "pending_in_inbox": len(pending),
+            "pending_files": pending,
+        },
+        indent=2,
+    )
+
+
+@mcp.tool()
+@_safe_tool
 async def ingest_path(path: str, file: str | None = None, tag: str | None = None) -> str:
     """Ingest books from a directory or a specific file into the knowledge base.
 

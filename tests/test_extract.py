@@ -21,9 +21,18 @@ def test_detect_format_mobi():
     assert detect_format(Path("book.mobi")) == BookFormat.MOBI
 
 
+def test_detect_format_txt():
+    assert detect_format(Path("book.txt")) == BookFormat.TXT
+
+
+def test_detect_format_html():
+    assert detect_format(Path("page.html")) == BookFormat.HTML
+    assert detect_format(Path("page.htm")) == BookFormat.HTML
+
+
 def test_detect_format_unsupported():
     with pytest.raises(ValueError, match="Unsupported"):
-        detect_format(Path("book.txt"))
+        detect_format(Path("book.docx"))
 
 
 def test_detect_format_no_extension():

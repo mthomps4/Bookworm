@@ -13,7 +13,16 @@ from .models import AppConfig, ChunkingConfig, EmbeddingsConfig, EmbeddingProvid
 # Load .env if present
 load_dotenv()
 
-_DEFAULT_CONFIG_PATH = Path("config.yaml")
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_DEFAULT_CONFIG_PATH = _PROJECT_ROOT / "config.yaml"
+
+
+def _resolve_path(p: Path) -> Path:
+    """Expand ~ and resolve relative paths against the project root."""
+    p = p.expanduser()
+    if not p.is_absolute():
+        p = _PROJECT_ROOT / p
+    return p
 
 
 def load_config(config_path: Path | None = None) -> AppConfig:
@@ -28,6 +37,13 @@ def load_config(config_path: Path | None = None) -> AppConfig:
 
     config = AppConfig.model_validate(raw)
     _apply_env_overrides(config)
+
+    # Ensure all paths are absolute (relative to project root)
+    lib = config.library
+    lib.books_dir = _resolve_path(lib.books_dir)
+    lib.manifest_path = _resolve_path(lib.manifest_path)
+    lib.db_path = _resolve_path(lib.db_path)
+
     return config
 
 

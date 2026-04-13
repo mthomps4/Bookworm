@@ -4,7 +4,7 @@ library:
   books_dir: "./books/inbox"
   manifest_path: "./books/.manifest.json"
   db_path: "./db"
-  allowed_formats: ["pdf", "epub", "mobi"]  # Remove formats to skip them
+  allowed_formats: ["pdf", "epub", "mobi", "md", "txt", "html"]  # Remove formats to skip them
 
 chunking:
   target_tokens: 600

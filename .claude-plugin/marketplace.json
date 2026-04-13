@@ -1,0 +1,14 @@
+{
+  "name": "bookworm-local",
+  "description": "Bookworm ebook library plugin",
+  "owner": {
+    "name": "matt"
+  },
+  "plugins": [
+    {
+      "name": "bookworm",
+      "description": "Search, browse, and research your personal ebook library from Claude Code",
+      "source": "./"
+    }
+  ]
+}

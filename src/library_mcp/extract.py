@@ -14,7 +14,15 @@ logger = logging.getLogger(__name__)
 
 def detect_format(path: Path) -> BookFormat:
     suffix = path.suffix.lower()
-    formats = {".pdf": BookFormat.PDF, ".epub": BookFormat.EPUB, ".mobi": BookFormat.MOBI, ".md": BookFormat.MARKDOWN}
+    formats = {
+        ".pdf": BookFormat.PDF,
+        ".epub": BookFormat.EPUB,
+        ".mobi": BookFormat.MOBI,
+        ".md": BookFormat.MARKDOWN,
+        ".txt": BookFormat.TXT,
+        ".html": BookFormat.HTML,
+        ".htm": BookFormat.HTML,
+    }
     if suffix not in formats:
         raise ValueError(f"Unsupported file format: {suffix}")
     return formats[suffix]
@@ -40,6 +48,8 @@ def extract_book(path: Path) -> ExtractedBook:
         BookFormat.EPUB: _extract_epub,
         BookFormat.MOBI: _extract_mobi,
         BookFormat.MARKDOWN: _extract_markdown,
+        BookFormat.TXT: _extract_txt,
+        BookFormat.HTML: _extract_html,
     }
     try:
         return extractors[fmt](path)
@@ -352,4 +362,158 @@ def _extract_markdown(path: Path) -> ExtractedBook:
         author=author,
         format=BookFormat.MARKDOWN,
         sections=sections,
+    )
+
+
+# --- Plain Text Extraction ---
+
+
+def _extract_txt(path: Path) -> ExtractedBook:
+    """Extract sections from a plain text file.
+
+    Splits on blank-line-separated blocks of uppercase or title-case lines
+    (common chapter headings), or falls back to fixed-size sections.
+    """
+    import re
+
+    text = path.read_text(errors="replace")
+    if not text.strip():
+        raise ExtractionError(f"Text file is empty: {path.name}")
+
+    title = path.stem.replace("-", " ").replace("_", " ")
+    author = "Unknown"
+
+    # Try to detect chapter-like headings: lines that are ALL CAPS, or
+    # "Chapter N" / "PART N" patterns preceded by a blank line
+    heading_pattern = re.compile(
+        r"(?:^|\n\n+)"                        # preceded by blank lines or start
+        r"((?:chapter|part|section)\s+\S+.*"   # "Chapter 1: ..." etc
+        r"|[A-Z][A-Z\s:—\-]{5,})"             # or ALL CAPS line (min 6 chars)
+        r"\s*\n",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    matches = list(heading_pattern.finditer(text))
+
+    if len(matches) >= 2:
+        sections = []
+        # Content before first heading
+        preamble = text[: matches[0].start()].strip()
+        if preamble and len(preamble) > 50:
+            sections.append(Section(title="Preamble", text=preamble))
+
+        for i, match in enumerate(matches):
+            heading = match.group(1).strip()
+            start = match.end()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            body = text[start:end].strip()
+            if body:
+                sections.append(Section(title=heading, text=body))
+
+        if sections:
+            return ExtractedBook(title=title, author=author, format=BookFormat.TXT, sections=sections)
+
+    # Fallback: split into ~2000-character sections by paragraph boundaries
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    sections = []
+    current_parts: list[str] = []
+    current_len = 0
+    section_num = 1
+
+    for para in paragraphs:
+        current_parts.append(para)
+        current_len += len(para)
+        if current_len >= 2000:
+            sections.append(Section(
+                title=f"Section {section_num}",
+                text="\n\n".join(current_parts),
+            ))
+            section_num += 1
+            current_parts = []
+            current_len = 0
+
+    if current_parts:
+        sections.append(Section(
+            title=f"Section {section_num}",
+            text="\n\n".join(current_parts),
+        ))
+
+    return ExtractedBook(title=title, author=author, format=BookFormat.TXT, sections=sections)
+
+
+# --- HTML Extraction ---
+
+
+def _extract_html(path: Path) -> ExtractedBook:
+    """Extract sections from an HTML file by splitting on heading elements."""
+    from bs4 import BeautifulSoup
+
+    html = path.read_text(errors="replace")
+    if not html.strip():
+        raise ExtractionError(f"HTML file is empty: {path.name}")
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Try to get title from <title> tag or <h1>
+    title_tag = soup.find("title")
+    h1_tag = soup.find("h1")
+    title = (title_tag.get_text(strip=True) if title_tag else None) or \
+            (h1_tag.get_text(strip=True) if h1_tag else None) or \
+            path.stem.replace("-", " ").replace("_", " ")
+
+    # Try to get author from meta tag
+    author_meta = soup.find("meta", attrs={"name": "author"})
+    author = author_meta["content"] if author_meta and author_meta.get("content") else "Unknown"
+
+    # Find all heading elements to use as section boundaries
+    headings = soup.find_all(["h1", "h2", "h3"])
+
+    if len(headings) >= 2:
+        sections = []
+
+        # Content before first heading
+        first_heading = headings[0]
+        pre_content = []
+        for sibling in first_heading.previous_siblings:
+            if hasattr(sibling, "get_text"):
+                text = sibling.get_text(separator="\n", strip=True)
+                if text:
+                    pre_content.insert(0, text)
+        preamble = "\n\n".join(pre_content).strip()
+        if preamble and len(preamble) > 50:
+            sections.append(Section(title="Preamble", text=preamble))
+
+        # Each heading starts a section
+        for i, heading in enumerate(headings):
+            heading_text = heading.get_text(strip=True)
+
+            # Collect all content between this heading and the next
+            content_parts = []
+            for sibling in heading.next_siblings:
+                # Stop at the next heading
+                if sibling in headings:
+                    break
+                if hasattr(sibling, "get_text"):
+                    text = sibling.get_text(separator="\n", strip=True)
+                    if text:
+                        content_parts.append(text)
+                elif isinstance(sibling, str) and sibling.strip():
+                    content_parts.append(sibling.strip())
+
+            body = "\n\n".join(content_parts).strip()
+            if body:
+                sections.append(Section(title=heading_text, text=body))
+
+        if sections:
+            return ExtractedBook(title=title, author=author, format=BookFormat.HTML, sections=sections)
+
+    # Fallback: treat entire document as one section
+    text = soup.get_text(separator="\n", strip=True)
+    if not text:
+        raise ExtractionError(f"No text content in HTML file: {path.name}")
+
+    return ExtractedBook(
+        title=title,
+        author=author,
+        format=BookFormat.HTML,
+        sections=[Section(title=title, text=text)],
     )

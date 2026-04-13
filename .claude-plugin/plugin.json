@@ -1,0 +1,7 @@
+{
+  "name": "bookworm",
+  "description": "Search, browse, and research your personal ebook library from Claude Code. Provides /bw (search), /bw-research (deep research), /bw-read (browse), and /bw-ingest (add books) slash commands.",
+  "author": {
+    "name": "matt"
+  }
+}
